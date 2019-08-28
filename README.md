@@ -16,7 +16,7 @@ In order to be able to use this service an API authentication key is needed. To 
 
 # Running locally with Docker Compose
 
-`TFV_API_AUTH_KEY=\<insert your API key here\> docker-compose -f ./deployments/docker-compose.yml up`
+`TFV_API_AUTH_KEY=<insert your API key here> docker-compose -f ./deployments/docker-compose.yml up`
 
 The ingress service will exit fatally and restart a couple of times until the RabbitMQ container is properly initialized and ready to accept connections. This is to be expected.
 
