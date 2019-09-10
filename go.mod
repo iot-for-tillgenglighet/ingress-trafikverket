@@ -1,4 +1,4 @@
-module ingress-trafikverket
+module github.com/iot-for-tillgenglighet/ingress-trafikverket
 
 require (
 	github.com/dgrijalva/jwt-go v3.2.0+incompatible
