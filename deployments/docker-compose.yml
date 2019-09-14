@@ -11,6 +11,9 @@ services:
     links:
       - rabbitmq
     environment:
+      - RABBITMQ_HOST=rabbitmq
+      - RABBITMQ_USER=user
+      - RABBITMQ_PASS=bitnami
       - TFV_API_AUTH_KEY=$TFV_API_AUTH_KEY
   
   rabbitmq:
