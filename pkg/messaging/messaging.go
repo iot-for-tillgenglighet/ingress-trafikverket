@@ -1,6 +1,7 @@
 package messaging
 
 import (
+	"encoding/json"
 	"fmt"
 
 	log "github.com/sirupsen/logrus"
@@ -31,11 +32,20 @@ type Context struct {
 	cfg        Config
 }
 
-func (ctx *Context) PublishOnTopic(topic string, body []byte) error {
-	err := ctx.channel.Publish(topicExchange, topic, false, false,
+type TopicMessage interface {
+	TopicName() string
+}
+
+func (ctx *Context) PublishOnTopic(message TopicMessage) error {
+	messageBytes, err := json.MarshalIndent(message, "", " ")
+	if err != nil {
+		return &Error{"Unable to marshal telemetry message to json!", err}
+	}
+
+	err = ctx.channel.Publish(topicExchange, message.TopicName(), false, false,
 		amqp.Publishing{
 			ContentType: "application/json",
-			Body:        body,
+			Body:        messageBytes,
 		})
 
 	return err

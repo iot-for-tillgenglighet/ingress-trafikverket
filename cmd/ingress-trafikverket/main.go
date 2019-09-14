@@ -89,13 +89,7 @@ func getAndPublishWeatherStationStatus(authKey string, lastChangeID string, mess
 			Temp: weatherstation.Measurement.Air.Temp,
 		}
 
-		responseBody, err := json.MarshalIndent(message, "", " ")
-		if err != nil {
-			log.Error("Unable to marshal telemetry message to json: " + err.Error())
-			return lastChangeID
-		}
-
-		err = messenger.PublishOnTopic(telemetry.TemperatureTopic, responseBody)
+		err = messenger.PublishOnTopic(message)
 
 		if err != nil {
 			log.Fatal("Failed to publish telemetry message to topic: " + err.Error())

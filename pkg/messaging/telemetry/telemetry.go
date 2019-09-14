@@ -7,4 +7,6 @@ type Temperature struct {
 	Temp float32 `json:"temp"`
 }
 
-var TemperatureTopic = "telemetry.temperature"
+func (msg *Temperature) TopicName() string {
+	return "telemetry.temperature"
+}
