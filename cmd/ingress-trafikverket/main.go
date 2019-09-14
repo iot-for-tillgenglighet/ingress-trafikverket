@@ -15,7 +15,6 @@ import (
 	"github.com/iot-for-tillgenglighet/ingress-trafikverket/pkg/messaging/telemetry"
 
 	log "github.com/sirupsen/logrus"
-	"github.com/streadway/amqp"
 )
 
 type weatherStationResponse struct {
@@ -41,7 +40,7 @@ type weatherStationResponse struct {
 	} `json:"RESPONSE"`
 }
 
-func getAndPublishWeatherStationStatus(authKey string, lastChangeID string, exchange *amqp.Channel) string {
+func getAndPublishWeatherStationStatus(authKey string, lastChangeID string, messenger *messaging.Context) string {
 
 	requestBody := fmt.Sprintf("<REQUEST><LOGIN authenticationkey=\"%s\" /><QUERY objecttype=\"WeatherStation\" schemaversion=\"1\" changeid=\"%s\"><INCLUDE>Id</INCLUDE><INCLUDE>Geometry.WGS84</INCLUDE><INCLUDE>Measurement.Air.Temp</INCLUDE><INCLUDE>Measurement.MeasureTime</INCLUDE><INCLUDE>ModifiedTime</INCLUDE><INCLUDE>Name</INCLUDE><FILTER><WITHIN name=\"Geometry.SWEREF99TM\" shape=\"box\" value=\"527000 6879000, 652500 6950000\" /></FILTER></QUERY></REQUEST>", authKey, lastChangeID)
 
@@ -52,8 +51,7 @@ func getAndPublishWeatherStationStatus(authKey string, lastChangeID string, exch
 	)
 
 	if err != nil {
-		errorString := fmt.Sprintf("Failed to request weather station data from Trafikverket: %s", err)
-		log.Fatal(errorString)
+		log.Fatal("Failed to request weather station data from Trafikverket: " + err.Error())
 	}
 
 	defer apiResponse.Body.Close()
@@ -65,7 +63,8 @@ func getAndPublishWeatherStationStatus(authKey string, lastChangeID string, exch
 	answer := &weatherStationResponse{}
 	err = json.Unmarshal(responseBody, answer)
 	if err != nil {
-		log.Fatal("Unmarshal problem")
+		log.Error("Unable to unmarshal response: " + err.Error())
+		return lastChangeID
 	}
 
 	for _, weatherstation := range answer.Response.Result[0].WeatherStations {
@@ -92,14 +91,11 @@ func getAndPublishWeatherStationStatus(authKey string, lastChangeID string, exch
 
 		responseBody, err := json.MarshalIndent(message, "", " ")
 		if err != nil {
-			log.Fatal("Marshal problem: " + err.Error())
+			log.Error("Unable to marshal telemetry message to json: " + err.Error())
+			return lastChangeID
 		}
 
-		err = exchange.Publish(messaging.IoTHubTopicExchange, telemetry.TemperatureTopic, false, false,
-			amqp.Publishing{
-				ContentType: "application/json",
-				Body:        responseBody,
-			})
+		err = messenger.PublishOnTopic(telemetry.TemperatureTopic, responseBody)
 
 		if err != nil {
 			log.Fatal("Failed to publish telemetry message to topic: " + err.Error())
@@ -109,123 +105,11 @@ func getAndPublishWeatherStationStatus(authKey string, lastChangeID string, exch
 	return answer.Response.Result[0].Info.LastChangeID
 }
 
-func createMessageQueueChannel(host, user, password string) (*amqp.Connection, *amqp.Channel) {
-	connectionString := fmt.Sprintf("amqp://%s:%s@%s:5672/", user, password, host)
-	conn, err := amqp.Dial(connectionString)
-	if err != nil {
-		log.Fatal("Unable to connect to message queue: " + err.Error())
-	}
-
-	amqpChannel, err := conn.Channel()
-
-	if err != nil {
-		log.Fatal("Unable to create an amqp channel to message queue: " + err.Error())
-	}
-
-	return conn, amqpChannel
-}
-
-func createCommandExchangeOrDie(amqpChannel *amqp.Channel) string {
-	err := amqpChannel.ExchangeDeclare(messaging.IoTHubCommandExchange, amqp.ExchangeDirect, false, false, false, false, nil)
-
-	if err != nil {
-		log.Fatal("Unable to declare command exchange " + messaging.IoTHubCommandExchange + ": " + err.Error())
-	}
-
-	return messaging.IoTHubCommandExchange
-}
-
-func createTopicExchangeOrDie(amqpChannel *amqp.Channel) string {
-	err := amqpChannel.ExchangeDeclare(messaging.IoTHubTopicExchange, amqp.ExchangeTopic, false, false, false, false, nil)
-
-	if err != nil {
-		log.Fatal("Unable to declare exchange " + messaging.IoTHubTopicExchange + ": " + err.Error())
-	}
-
-	return messaging.IoTHubTopicExchange
-}
-
-func createCommandAndResponseQueues(amqpChannel *amqp.Channel) {
-	exchangeName := createCommandExchangeOrDie(amqpChannel)
-
-	commandQueue, err := amqpChannel.QueueDeclare("ingress-trafikverket", false, false, false, false, nil)
-	if err != nil {
-		log.Fatal("Failed to declare command queue for ingress-trafikverket!")
-	}
-
-	err = amqpChannel.QueueBind(commandQueue.Name, "ingress-trafikverket", exchangeName, false, nil)
-	if err != nil {
-		log.Fatalf("Failed to bind command queue %s to exchange %s!", commandQueue.Name, exchangeName)
-	}
-
-	responseQueue, err := amqpChannel.QueueDeclare("", false, true, true, false, nil)
-	if err != nil {
-		log.Fatal("Failed to declare response queue for ingress-trafikverket!")
-	}
-
-	err = amqpChannel.QueueBind(responseQueue.Name, responseQueue.Name, exchangeName, false, nil)
-	if err != nil {
-		log.Fatalf("Failed to bind response queue %s to exchange %s!", responseQueue.Name, exchangeName)
-	}
-
-	commands, err := amqpChannel.Consume(commandQueue.Name, "command-consumer", false, false, false, false, nil)
-	if err != nil {
-		log.Fatalf("Unable to start consuming commands from %s!", commandQueue.Name)
-	}
-
-	go func() {
-		for cmd := range commands {
-			log.Info("Received command: " + string(cmd.Body))
-
-			err = amqpChannel.Publish(exchangeName, cmd.ReplyTo, true, false, amqp.Publishing{
-				ContentType: "application/json",
-				Body:        []byte("{\"cmd\": \"pong\"}"),
-			})
-			if err != nil {
-				log.Error("Failed to publish a pong response to ourselves!")
-			}
-
-			cmd.Ack(true)
-		}
-	}()
-
-	responses, err := amqpChannel.Consume(responseQueue.Name, "response-consumer", false, false, false, false, nil)
-	if err != nil {
-		log.Fatalf("Unable to start consuming responses from %s!", responseQueue.Name)
-	}
-
-	err = amqpChannel.Publish(exchangeName, "ingress-trafikverket", true, false, amqp.Publishing{
-		ContentType: "application/json",
-		ReplyTo:     responseQueue.Name,
-		Body:        []byte("{\"cmd\": \"ping\"}"),
-	})
-	if err != nil {
-		log.Fatal("Failed to publish a ping command to ourselves!")
-	}
-
-	go func() {
-		for response := range responses {
-			log.Info("Received response: " + string(response.Body))
-			response.Ack(true)
-		}
-	}()
-
-	// TODO: Replace with a barrier that waits for the ping<->pong to complete
-	time.Sleep(5 * time.Second)
-}
-
-func initializeMessaging(host, user, password string) (*amqp.Connection, *amqp.Channel) {
-	conn, channel := createMessageQueueChannel(host, user, password)
-
-	createTopicExchangeOrDie(channel)
-	createCommandAndResponseQueues(channel)
-
-	return conn, channel
-}
-
 func main() {
 
-	log.Info("Starting up ingress-trafikverket ...")
+	serviceName := "ingress-trafikverket"
+
+	log.Infof("Starting up %s ...", serviceName)
 
 	authKeyEnvironmentVariable := "TFV_API_AUTH_KEY"
 	authenticationKey := os.Getenv(authKeyEnvironmentVariable)
@@ -234,19 +118,29 @@ func main() {
 		log.Fatal("API authentication key missing. Please set " + authKeyEnvironmentVariable + " to a valid API key.")
 	}
 
-	conn, channel := initializeMessaging("rabbitmq", "user", "bitnami")
+	var messenger *messaging.Context
+	var err error
 
-	defer conn.Close()
-	defer channel.Close()
+	for messenger == nil {
+
+		time.Sleep(2 * time.Second)
+
+		messenger, err = messaging.Initialize(messaging.Config{
+			ServiceName: serviceName,
+			Host:        "rabbitmq",
+			User:        "user",
+			Password:    "bitnami",
+		})
+
+		if err != nil {
+			log.Error(err)
+		}
+	}
 
 	lastChangeID := "0"
 
 	for {
-		if conn.IsClosed() {
-			log.Error("Connection is closed!")
-		}
-
-		lastChangeID = getAndPublishWeatherStationStatus(authenticationKey, lastChangeID, channel)
+		lastChangeID = getAndPublishWeatherStationStatus(authenticationKey, lastChangeID, messenger)
 		time.Sleep(30 * time.Second)
 	}
 }
