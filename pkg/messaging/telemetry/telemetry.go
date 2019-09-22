@@ -7,6 +7,10 @@ type Temperature struct {
 	Temp float32 `json:"temp"`
 }
 
+func (msg *Temperature) ContentType() string {
+	return "application/json"
+}
+
 func (msg *Temperature) TopicName() string {
 	return "telemetry.temperature"
 }

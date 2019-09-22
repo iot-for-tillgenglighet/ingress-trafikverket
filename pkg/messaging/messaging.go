@@ -33,6 +33,7 @@ type Context struct {
 }
 
 type TopicMessage interface {
+	ContentType() string
 	TopicName() string
 }
 
@@ -44,7 +45,7 @@ func (ctx *Context) PublishOnTopic(message TopicMessage) error {
 
 	err = ctx.channel.Publish(topicExchange, message.TopicName(), false, false,
 		amqp.Publishing{
-			ContentType: "application/json",
+			ContentType: message.ContentType(),
 			Body:        messageBytes,
 		})
 
