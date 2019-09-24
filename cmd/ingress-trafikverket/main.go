@@ -28,7 +28,7 @@ type weatherStationResponse struct {
 				} `json:"Geometry"`
 				Measurement struct {
 					Air struct {
-						Temp float32 `json:"Temp"`
+						Temp float64 `json:"Temp"`
 					} `json:"Air"`
 					MeasureTime string `json:"MeasureTime"`
 				} `json:"Measurement"`
