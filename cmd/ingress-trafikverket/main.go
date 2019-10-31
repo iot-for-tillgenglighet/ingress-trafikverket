@@ -11,8 +11,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/iot-for-tillgenglighet/ingress-trafikverket/pkg/messaging"
-	"github.com/iot-for-tillgenglighet/ingress-trafikverket/pkg/messaging/telemetry"
+	"github.com/iot-for-tillgenglighet/messaging-golang/pkg/messaging"
+	"github.com/iot-for-tillgenglighet/messaging-golang/pkg/messaging/telemetry"
 
 	log "github.com/sirupsen/logrus"
 )
