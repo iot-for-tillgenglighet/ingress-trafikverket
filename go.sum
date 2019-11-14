@@ -4,6 +4,8 @@ github.com/iot-for-tillgenglighet/messaging-golang v0.0.0-20191031160401-7a0bcda
 github.com/iot-for-tillgenglighet/messaging-golang v0.0.0-20191031160401-7a0bcda0e2e4/go.mod h1:pICHkwvHaONBKmJhjSqYH23mS0y+iTQd3KOxKKlAGbQ=
 github.com/iot-for-tillgenglighet/messaging-golang v0.0.0-20191101101346-a8061329ce11 h1:dkPVJyfvtIglkseBHjlSS4bvOfGQUGpNdt/7Wq6Nh+A=
 github.com/iot-for-tillgenglighet/messaging-golang v0.0.0-20191101101346-a8061329ce11/go.mod h1:pICHkwvHaONBKmJhjSqYH23mS0y+iTQd3KOxKKlAGbQ=
+github.com/iot-for-tillgenglighet/messaging-golang v0.0.0-20191114224854-abfc2ffce868 h1:nw1SBUEVRNkMOr9fZNxEk2832iB6d+MuOsaTkCnqVjY=
+github.com/iot-for-tillgenglighet/messaging-golang v0.0.0-20191114224854-abfc2ffce868/go.mod h1:pICHkwvHaONBKmJhjSqYH23mS0y+iTQd3KOxKKlAGbQ=
 github.com/konsorten/go-windows-terminal-sequences v1.0.1 h1:mweAR1A6xJ3oS2pRaGiHgQ4OO8tzTaLawm8vnODuwDk=
 github.com/konsorten/go-windows-terminal-sequences v1.0.1/go.mod h1:T0+1ngSBFLxvqU3pZ+m/2kptfBszLMUkC4ZK/EgS/cQ=
 github.com/pmezard/go-difflib v1.0.0 h1:4DBwDE0NGyQoBHbLQYPwSUPoCMWR5BEzIk/f1lZbAQM=
