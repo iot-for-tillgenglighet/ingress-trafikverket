@@ -9,5 +9,5 @@ services:
 before_install:
   - echo "$DOCKER_PASSWORD" | docker login docker.pkg.github.com -u "$DOCKER_USERNAME" --password-stdin
   - docker build -f deployments/Dockerfile -t github.com/iot-for-tillgenglighet/ingress-trafikverket .
-  - docker tag github.com/iot-for-tillgenglighet/ingress-trafikverket docker.pkg.github.com/iot-for-tillgenglighet/ingress-trafikverket/ingress-tfv:$TRAVIS_COMMIT
-  - docker push docker.pkg.github.com/iot-for-tillgenglighet/ingress-trafikverket/ingress-tfv:$TRAVIS_COMMIT
+  - docker tag github.com/iot-for-tillgenglighet/ingress-trafikverket docker.pkg.github.com/iot-for-tillgenglighet/ingress-trafikverket/ingress-tfv:$TAG_PREFIX$TRAVIS_COMMIT
+  - docker push docker.pkg.github.com/iot-for-tillgenglighet/ingress-trafikverket/ingress-tfv:$TAG_PREFIX$TRAVIS_COMMIT
