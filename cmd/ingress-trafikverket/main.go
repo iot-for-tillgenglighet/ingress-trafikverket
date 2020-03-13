@@ -73,9 +73,18 @@ func getAndPublishWeatherStationStatus(authKey string, lastChangeID string, mess
 		position = position[7 : len(position)-1]
 
 		Longitude := strings.Split(position, " ")[0]
-		newLong, err := strconv.ParseFloat(Longitude, 32)
+		newLong, _ := strconv.ParseFloat(Longitude, 32)
 		Latitude := strings.Split(position, " ")[1]
-		newLat, err := strconv.ParseFloat(Latitude, 32)
+		newLat, _ := strconv.ParseFloat(Latitude, 32)
+
+		ts, err := time.Parse(time.RFC3339, weatherstation.Measurement.MeasureTime)
+
+		if err != nil {
+			log.Error("Failed to parse timestamp " + weatherstation.Measurement.MeasureTime)
+			continue
+		}
+
+		timeStamp := ts.UTC().Format(time.RFC3339)
 
 		message := &telemetry.Temperature{
 			IoTHubMessage: messaging.IoTHubMessage{
@@ -84,7 +93,7 @@ func getAndPublishWeatherStationStatus(authKey string, lastChangeID string, mess
 					Latitude:  newLat,
 					Longitude: newLong,
 				},
-				Timestamp: weatherstation.Measurement.MeasureTime,
+				Timestamp: timeStamp,
 			},
 			Temp: weatherstation.Measurement.Air.Temp,
 		}
