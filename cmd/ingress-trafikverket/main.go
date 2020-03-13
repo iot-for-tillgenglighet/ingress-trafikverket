@@ -72,10 +72,10 @@ func getAndPublishWeatherStationStatus(authKey string, lastChangeID string, mess
 		position := weatherstation.Geometry.Position
 		position = position[7 : len(position)-1]
 
-		Latitude := strings.Split(position, " ")[0]
-		newLat, err := strconv.ParseFloat(Latitude, 32)
-		Longitude := strings.Split(position, " ")[1]
+		Longitude := strings.Split(position, " ")[0]
 		newLong, err := strconv.ParseFloat(Longitude, 32)
+		Latitude := strings.Split(position, " ")[1]
+		newLat, err := strconv.ParseFloat(Latitude, 32)
 
 		message := &telemetry.Temperature{
 			IoTHubMessage: messaging.IoTHubMessage{
