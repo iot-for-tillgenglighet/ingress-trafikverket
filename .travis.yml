@@ -1,7 +1,7 @@
 notifications:
   email: false
 
-language: go
+language: minimal
 
 services:
   - docker
