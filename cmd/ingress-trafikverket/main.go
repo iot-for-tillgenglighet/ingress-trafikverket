@@ -17,6 +17,50 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
+// TFVError encapsulates a lower level error together with an error
+// message provided by the caller that experienced the error
+type TFVError struct {
+	msg string
+	err error
+}
+
+// FatalTFVError signals that an unrecoverable error has occured and that
+// the calling application should terminate
+type FatalTFVError struct {
+	TFVError
+}
+
+// Error returns a concatenated error string
+func (err *TFVError) Error() string {
+	if err.err != nil {
+		return err.msg + " (" + err.err.Error() + ")"
+	}
+
+	return err.msg
+}
+
+// NewError returns a new TFVError instance
+func NewError(msg string, err error) *TFVError {
+	return &TFVError{msg, err}
+}
+
+func (err *FatalTFVError) Error() string {
+	return "FATAL: " + err.TFVError.Error()
+}
+
+// NewFatalError returns a new FatalTFVError instance
+func NewFatalError(msg string, err error) *FatalTFVError {
+	return &FatalTFVError{
+		TFVError: TFVError{msg, err},
+	}
+}
+
+// MessageTopicInterface uses interface segregation to allow simpler mocking
+// of code that wants to publish messages on topics
+type MessageTopicInterface interface {
+	PublishOnTopic(msg messaging.TopicMessage) error
+}
+
 type weatherStationResponse struct {
 	Response struct {
 		Result []struct {
@@ -40,18 +84,21 @@ type weatherStationResponse struct {
 	} `json:"RESPONSE"`
 }
 
-func getAndPublishWeatherStationStatus(authKey string, lastChangeID string, messenger *messaging.Context) string {
+// TrafikverketURL holds the URL to be called when getting data from Trafikverket
+var TrafikverketURL string = "https://api.trafikinfo.trafikverket.se/v2/data.json"
+
+func getAndPublishWeatherStationStatus(authKey string, lastChangeID string, messenger MessageTopicInterface) (string, error) {
 
 	requestBody := fmt.Sprintf("<REQUEST><LOGIN authenticationkey=\"%s\" /><QUERY objecttype=\"WeatherStation\" schemaversion=\"1\" changeid=\"%s\"><INCLUDE>Id</INCLUDE><INCLUDE>Geometry.WGS84</INCLUDE><INCLUDE>Measurement.Air.Temp</INCLUDE><INCLUDE>Measurement.MeasureTime</INCLUDE><INCLUDE>ModifiedTime</INCLUDE><INCLUDE>Name</INCLUDE><FILTER><WITHIN name=\"Geometry.SWEREF99TM\" shape=\"box\" value=\"527000 6879000, 652500 6950000\" /></FILTER></QUERY></REQUEST>", authKey, lastChangeID)
 
 	apiResponse, err := http.Post(
-		"https://api.trafikinfo.trafikverket.se/v2/data.json",
+		TrafikverketURL,
 		"text/xml",
 		bytes.NewBufferString(requestBody),
 	)
 
 	if err != nil {
-		log.Fatal("Failed to request weather station data from Trafikverket: " + err.Error())
+		return lastChangeID, NewError("Failed to request weather station data from Trafikverket", err)
 	}
 
 	defer apiResponse.Body.Close()
@@ -63,8 +110,7 @@ func getAndPublishWeatherStationStatus(authKey string, lastChangeID string, mess
 	answer := &weatherStationResponse{}
 	err = json.Unmarshal(responseBody, answer)
 	if err != nil {
-		log.Error("Unable to unmarshal response: " + err.Error())
-		return lastChangeID
+		return lastChangeID, NewError("Unable to marshal response", err)
 	}
 
 	for _, weatherstation := range answer.Response.Result[0].WeatherStations {
@@ -101,11 +147,11 @@ func getAndPublishWeatherStationStatus(authKey string, lastChangeID string, mess
 		err = messenger.PublishOnTopic(message)
 
 		if err != nil {
-			log.Fatal("Failed to publish telemetry message to topic: " + err.Error())
+			return lastChangeID, NewFatalError("Failed to publish telemetry message to topic", err)
 		}
 	}
 
-	return answer.Response.Result[0].Info.LastChangeID
+	return answer.Response.Result[0].Info.LastChangeID, nil
 }
 
 func main() {
@@ -127,9 +173,19 @@ func main() {
 	defer messenger.Close()
 
 	lastChangeID := "0"
+	var err error = nil
 
 	for {
-		lastChangeID = getAndPublishWeatherStationStatus(authenticationKey, lastChangeID, messenger)
+		lastChangeID, err = getAndPublishWeatherStationStatus(authenticationKey, lastChangeID, messenger)
+		if err != nil {
+			switch err.(type) {
+			case *FatalTFVError:
+				log.Fatal(err)
+				break
+			default:
+				log.Error(err)
+			}
+		}
 		time.Sleep(30 * time.Second)
 	}
 }
