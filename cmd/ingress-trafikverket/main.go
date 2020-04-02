@@ -89,23 +89,7 @@ var TrafikverketURL string = "https://api.trafikinfo.trafikverket.se/v2/data.jso
 
 func getAndPublishWeatherStationStatus(authKey string, lastChangeID string, messenger MessageTopicInterface) (string, error) {
 
-	requestBody := fmt.Sprintf("<REQUEST><LOGIN authenticationkey=\"%s\" /><QUERY objecttype=\"WeatherStation\" schemaversion=\"1\" changeid=\"%s\"><INCLUDE>Id</INCLUDE><INCLUDE>Geometry.WGS84</INCLUDE><INCLUDE>Measurement.Air.Temp</INCLUDE><INCLUDE>Measurement.MeasureTime</INCLUDE><INCLUDE>ModifiedTime</INCLUDE><INCLUDE>Name</INCLUDE><FILTER><WITHIN name=\"Geometry.SWEREF99TM\" shape=\"box\" value=\"527000 6879000, 652500 6950000\" /></FILTER></QUERY></REQUEST>", authKey, lastChangeID)
-
-	apiResponse, err := http.Post(
-		TrafikverketURL,
-		"text/xml",
-		bytes.NewBufferString(requestBody),
-	)
-
-	if err != nil {
-		return lastChangeID, NewError("Failed to request weather station data from Trafikverket", err)
-	}
-
-	defer apiResponse.Body.Close()
-
-	responseBody, err := ioutil.ReadAll(apiResponse.Body)
-
-	log.Info("Received response: " + string(responseBody))
+	responseBody, err := getWeatherStationStatus(authKey, lastChangeID) 
 
 	answer := &weatherStationResponse{}
 	err = json.Unmarshal(responseBody, answer)
@@ -152,6 +136,29 @@ func getAndPublishWeatherStationStatus(authKey string, lastChangeID string, mess
 	}
 
 	return answer.Response.Result[0].Info.LastChangeID, nil
+}
+
+
+func getWeatherStationStatus(authKey string, lastChangeID string) ([]byte, error) {
+	requestBody := fmt.Sprintf("<REQUEST><LOGIN authenticationkey=\"%s\" /><QUERY objecttype=\"WeatherStation\" schemaversion=\"1\" changeid=\"%s\"><INCLUDE>Id</INCLUDE><INCLUDE>Geometry.WGS84</INCLUDE><INCLUDE>Measurement.Air.Temp</INCLUDE><INCLUDE>Measurement.MeasureTime</INCLUDE><INCLUDE>ModifiedTime</INCLUDE><INCLUDE>Name</INCLUDE><FILTER><WITHIN name=\"Geometry.SWEREF99TM\" shape=\"box\" value=\"527000 6879000, 652500 6950000\" /></FILTER></QUERY></REQUEST>", authKey, lastChangeID)
+
+	apiResponse, err := http.Post(
+		TrafikverketURL,
+		"text/xml",
+		bytes.NewBufferString(requestBody),
+	)
+
+	if err != nil {
+		return []byte(lastChangeID), NewError("Failed to request weather station data from Trafikverket", err)
+	}
+
+	defer apiResponse.Body.Close()
+
+	responseBody, err := ioutil.ReadAll(apiResponse.Body)
+
+	log.Info("Received response: " + string(responseBody))
+
+	return responseBody, err
 }
 
 func main() {
