@@ -61,23 +61,30 @@ type MessageTopicInterface interface {
 	PublishOnTopic(msg messaging.TopicMessage) error
 }
 
+type geometry struct {
+	Position string `json:"WGS84"`
+}
+
+type measurement struct {
+	Air         air    `json:"Air"`
+	MeasureTime string `json:"MeasureTime"`
+}
+
+type air struct {
+	Temp float64 `json:"Temp"`
+}
+
+type weatherStation struct {
+	ID          string      `json:"ID"`
+	Name        string      `json:"Name"`
+	Geometry    geometry    `json:"Geometry"`
+	Measurement measurement `json:"Measurement"`
+}
 type weatherStationResponse struct {
 	Response struct {
 		Result []struct {
-			WeatherStations []struct {
-				ID       string `json:"ID"`
-				Name     string `json:"Name"`
-				Geometry struct {
-					Position string `json:"WGS84"`
-				} `json:"Geometry"`
-				Measurement struct {
-					Air struct {
-						Temp float64 `json:"Temp"`
-					} `json:"Air"`
-					MeasureTime string `json:"MeasureTime"`
-				} `json:"Measurement"`
-			} `json:"WeatherStation"`
-			Info struct {
+			WeatherStations []weatherStation `json:"WeatherStation"`
+			Info            struct {
 				LastChangeID string `json:"LASTCHANGEID"`
 			} `json:"INFO"`
 		} `json:"RESULT"`
@@ -89,7 +96,7 @@ var TrafikverketURL string = "https://api.trafikinfo.trafikverket.se/v2/data.jso
 
 func getAndPublishWeatherStationStatus(authKey string, lastChangeID string, messenger MessageTopicInterface) (string, error) {
 
-	responseBody, err := getWeatherStationStatus(authKey, lastChangeID) 
+	responseBody, err := getWeatherStationStatus(authKey, lastChangeID)
 
 	answer := &weatherStationResponse{}
 	err = json.Unmarshal(responseBody, answer)
@@ -98,46 +105,48 @@ func getAndPublishWeatherStationStatus(authKey string, lastChangeID string, mess
 	}
 
 	for _, weatherstation := range answer.Response.Result[0].WeatherStations {
-
-		position := weatherstation.Geometry.Position
-		position = position[7 : len(position)-1]
-
-		Longitude := strings.Split(position, " ")[0]
-		newLong, _ := strconv.ParseFloat(Longitude, 32)
-		Latitude := strings.Split(position, " ")[1]
-		newLat, _ := strconv.ParseFloat(Latitude, 32)
-
-		ts, err := time.Parse(time.RFC3339, weatherstation.Measurement.MeasureTime)
-
+		err = publishWeatherStationStatus(weatherstation, messenger)
 		if err != nil {
-			log.Error("Failed to parse timestamp " + weatherstation.Measurement.MeasureTime)
-			continue
-		}
-
-		timeStamp := ts.UTC().Format(time.RFC3339)
-
-		message := &telemetry.Temperature{
-			IoTHubMessage: messaging.IoTHubMessage{
-				Origin: messaging.IoTHubMessageOrigin{
-					Device:    weatherstation.ID,
-					Latitude:  newLat,
-					Longitude: newLong,
-				},
-				Timestamp: timeStamp,
-			},
-			Temp: weatherstation.Measurement.Air.Temp,
-		}
-
-		err = messenger.PublishOnTopic(message)
-
-		if err != nil {
-			return lastChangeID, NewFatalError("Failed to publish telemetry message to topic", err)
+			return lastChangeID, NewError("Unable to marshal response", err)
 		}
 	}
 
 	return answer.Response.Result[0].Info.LastChangeID, nil
 }
 
+func publishWeatherStationStatus(weatherstation weatherStation, messenger MessageTopicInterface) error {
+
+	position := weatherstation.Geometry.Position
+	position = position[7 : len(position)-1]
+
+	Longitude := strings.Split(position, " ")[0]
+	newLong, _ := strconv.ParseFloat(Longitude, 32)
+	Latitude := strings.Split(position, " ")[1]
+	newLat, _ := strconv.ParseFloat(Latitude, 32)
+
+	ts, err := time.Parse(time.RFC3339, weatherstation.Measurement.MeasureTime)
+
+	if err != nil {
+		log.Error("Failed to parse timestamp " + weatherstation.Measurement.MeasureTime)
+		// continue
+	}
+
+	timeStamp := ts.UTC().Format(time.RFC3339)
+
+	message := &telemetry.Temperature{
+		IoTHubMessage: messaging.IoTHubMessage{
+			Origin: messaging.IoTHubMessageOrigin{
+				Device:    weatherstation.ID,
+				Latitude:  newLat,
+				Longitude: newLong,
+			},
+			Timestamp: timeStamp,
+		},
+		Temp: weatherstation.Measurement.Air.Temp,
+	}
+
+	return messenger.PublishOnTopic(message)
+}
 
 func getWeatherStationStatus(authKey string, lastChangeID string) ([]byte, error) {
 	requestBody := fmt.Sprintf("<REQUEST><LOGIN authenticationkey=\"%s\" /><QUERY objecttype=\"WeatherStation\" schemaversion=\"1\" changeid=\"%s\"><INCLUDE>Id</INCLUDE><INCLUDE>Geometry.WGS84</INCLUDE><INCLUDE>Measurement.Air.Temp</INCLUDE><INCLUDE>Measurement.MeasureTime</INCLUDE><INCLUDE>ModifiedTime</INCLUDE><INCLUDE>Name</INCLUDE><FILTER><WITHIN name=\"Geometry.SWEREF99TM\" shape=\"box\" value=\"527000 6879000, 652500 6950000\" /></FILTER></QUERY></REQUEST>", authKey, lastChangeID)
